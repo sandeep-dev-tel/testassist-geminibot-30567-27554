@@ -1,0 +1,29 @@
+# Docker Compose for running a local PostgreSQL instance for backend_fastapi
+#
+# IMPORTANT: To connect your FastAPI backend, make sure your .env variables align:
+#   DB_USER=chatbotuser
+#   DB_PASSWORD=yourpassword   # <-- Must match POSTGRES_PASSWORD below!
+#   DB_NAME=chatbotdb
+#   DB_HOST=postgres
+#   DB_PORT=5432
+#
+# Remember to keep the .env 'DB_PASSWORD' value in sync with POSTGRES_PASSWORD here!
+
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: chatbot_postgres
+    environment:
+      POSTGRES_DB: chatbotdb
+      POSTGRES_USER: chatbotuser
+      POSTGRES_PASSWORD: yourpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
