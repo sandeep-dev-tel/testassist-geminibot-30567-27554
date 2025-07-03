@@ -330,7 +330,7 @@ if AUTH_ENABLED:
         NOTE: This endpoint requires database availability on startup.
         If PostgreSQL is not running or unreachable, all DB-backed endpoints will fail with HTTP 503.
         """
-        # Fix: Convert SQLAlchemy User to Pydantic UserProfile
+        # Return a Pydantic UserProfile (do not return raw SQLAlchemy User)
         return UserProfile(
             id=user.id, username=user.username, created_at=user.created_at
         )

@@ -1,3 +1,12 @@
+ERROR:    STARTUP DIAG: Port 3001 status: free; Database connection FAILED: (psycopg2.OperationalError) connection to server at "localhost" (::1), port 5432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+connection to server at "localhost" (127.0.0.1), port 5432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+
+(Background on this error at: https://sqlalche.me/e/20/e3q8); Env: DB_HOST=localhost DB_PORT=5432 DB_USER=chatbotuser DB_NAME=chatbotdb
+/home/kavia/workspace/code-generation/testassist-geminibot-30567-27554/backend_fastapi/venv/lib/python3.12/site-packages/pydantic/_internal/_config.py:373: UserWarning: Valid config keys have changed in V2:
+* 'orm_mode' has been renamed to 'from_attributes'
+  warnings.warn(message, UserWarning)
 Traceback (most recent call last):
   File "/home/kavia/workspace/code-generation/testassist-geminibot-30567-27554/backend_fastapi/venv/bin/uvicorn", line 8, in <module>
     sys.exit(main())
@@ -35,8 +44,6 @@ Traceback (most recent call last):
   File "/home/kavia/workspace/code-generation/testassist-geminibot-30567-27554/backend_fastapi/venv/lib/python3.12/site-packages/uvicorn/config.py", line 435, in load
     self.loaded_app = import_from_string(self.app)
                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/kavia/workspace/code-generation/testassist-geminibot-30567-27554/backend_fastapi/venv/lib/python3.12/site-packages/uvicorn/importer.py", line 22, in import_from_string
-    raise exc from None
   File "/home/kavia/workspace/code-generation/testassist-geminibot-30567-27554/backend_fastapi/venv/lib/python3.12/site-packages/uvicorn/importer.py", line 19, in import_from_string
     module = importlib.import_module(module_str)
              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -49,6 +56,23 @@ Traceback (most recent call last):
   File "<frozen importlib._bootstrap>", line 935, in _load_unlocked
   File "<frozen importlib._bootstrap_external>", line 995, in exec_module
   File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
-  File "/home/kavia/workspace/code-generation/testassist-geminibot-30567-27554/backend_fastapi/src/api/main.py", line 15, in <module>
-    import jwt
-ModuleNotFoundError: No module named 'jwt'
+  File "/home/kavia/workspace/code-generation/testassist-geminibot-30567-27554/backend_fastapi/src/api/main.py", line 356, in <module>
+    @app.post("/chat/", response_model=MessageOut, tags=["chat"], summary="Send user message", description="Submit a chat message. Starts a new conversation if no conversation_id is provided.")
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kavia/workspace/code-generation/testassist-geminibot-30567-27554/backend_fastapi/venv/lib/python3.12/site-packages/fastapi/routing.py", line 994, in decorator
+    self.add_api_route(
+  File "/home/kavia/workspace/code-generation/testassist-geminibot-30567-27554/backend_fastapi/venv/lib/python3.12/site-packages/fastapi/routing.py", line 933, in add_api_route
+    route = route_class(
+            ^^^^^^^^^^^^
+  File "/home/kavia/workspace/code-generation/testassist-geminibot-30567-27554/backend_fastapi/venv/lib/python3.12/site-packages/fastapi/routing.py", line 554, in __init__
+    self.dependant = get_dependant(path=self.path_format, call=self.endpoint)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kavia/workspace/code-generation/testassist-geminibot-30567-27554/backend_fastapi/venv/lib/python3.12/site-packages/fastapi/dependencies/utils.py", line 285, in get_dependant
+    param_details = analyze_param(
+                    ^^^^^^^^^^^^^^
+  File "/home/kavia/workspace/code-generation/testassist-geminibot-30567-27554/backend_fastapi/venv/lib/python3.12/site-packages/fastapi/dependencies/utils.py", line 488, in analyze_param
+    field = create_model_field(
+            ^^^^^^^^^^^^^^^^^^^
+  File "/home/kavia/workspace/code-generation/testassist-geminibot-30567-27554/backend_fastapi/venv/lib/python3.12/site-packages/fastapi/utils.py", line 98, in create_model_field
+    raise fastapi.exceptions.FastAPIError(
+fastapi.exceptions.FastAPIError: Invalid args for response field! Hint: check that <class 'src.api.main.User'> is a valid Pydantic field type. If you are using a return type annotation that is not a valid Pydantic field (e.g. Union[Response, dict, None]) you can disable generating the response model from the type annotation with the path operation decorator parameter response_model=None. Read more: https://fastapi.tiangolo.com/tutorial/response-model/
