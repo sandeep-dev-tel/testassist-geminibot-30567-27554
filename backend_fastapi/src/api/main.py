@@ -1,5 +1,6 @@
 import os
 import logging
+import socket
 from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, Depends, HTTPException, Body, status, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +14,48 @@ from sqlalchemy.orm import sessionmaker, relationship, declarative_base, Session
 from datetime import datetime, timedelta
 import jwt
 import hashlib
+
+# Load env variables from .env
+load_dotenv()
+
+# === Startup Debug for 502 Diagnosis ===
+def _diagnose_startup():
+    """
+    Prints diagnostic info to help troubleshoot 502 Bad Gateway:
+    - Checks if port is available
+    - Tests database connection
+    - Dumps key environment variables
+    """
+    PORT = int(os.getenv("PORT", "3001"))
+    DB_HOST = os.getenv("DB_HOST", "localhost")
+    DB_PORT = int(os.getenv("DB_PORT", "5432"))
+    DB_NAME = os.getenv("DB_NAME", "chatbotdb")
+    DB_USER = os.getenv("DB_USER", "chatbotuser")
+    DB_PASSWORD = os.getenv("DB_PASSWORD", "chatbotpass")
+    logger = logging.getLogger("uvicorn.error")
+    # Port check
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.bind(("0.0.0.0", PORT))
+        sock.close()
+        port_status = "free"
+    except Exception as e:
+        port_status = f"in use or blocked: {e}"
+    # DB check
+    db_message = ""
+    try:
+        engine = create_engine(f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}", pool_pre_ping=True)
+        with engine.connect() as conn:
+            _ = conn.execute("SELECT 1")
+        db_message = "Database connection Succeeded"
+    except Exception as e:
+        db_message = f"Database connection FAILED: {e}"
+    logger.error(
+        f"STARTUP DIAG: Port {PORT} status: {port_status}; {db_message}; Env: DB_HOST={DB_HOST} DB_PORT={DB_PORT} DB_USER={DB_USER} DB_NAME={DB_NAME}"
+    )
+
+# Call at startup for extra diagnostics
+_diagnose_startup()
 
 # === Request Logging Middleware (added for debugging frontend-backend connectivity) ===
 class RequestLoggingMiddleware:
@@ -36,6 +79,56 @@ class RequestLoggingMiddleware:
 
 # Load env variables from .env
 load_dotenv()
+
+# Remove duplicate startup diagnosis, import socket, import sys, and db_ok if they are still lingering below
+
+import socket
+import sys
+
+# --- Startup Debug for 502 Diagnosis ---
+def _diagnose_startup():
+    """
+    Prints diagnostic info to help troubleshoot 502 Bad Gateway:
+    - Checks if port is available
+    - Tests database connection
+    - Dumps key environment variables
+    """
+    import os
+    import logging
+    PORT = int(os.getenv("PORT", "3001"))
+    DB_HOST = os.getenv("DB_HOST", "localhost")
+    DB_PORT = int(os.getenv("DB_PORT", "5432"))
+    DB_NAME = os.getenv("DB_NAME", "chatbotdb")
+    DB_USER = os.getenv("DB_USER", "chatbotuser")
+    DB_PASSWORD = os.getenv("DB_PASSWORD", "chatbotpass")
+    logger = logging.getLogger("uvicorn.error")
+    # Port check
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    port_status = None
+    try:
+        sock.bind(("0.0.0.0", PORT))
+        sock.close()
+        port_status = "free"
+    except Exception as e:
+        port_status = f"in use or blocked: {e}"
+    # DB check
+    db_ok = False
+    db_message = ""
+    try:
+        from sqlalchemy import create_engine
+        engine = create_engine(f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}", pool_pre_ping=True)
+        with engine.connect() as conn:
+            _ = conn.execute("SELECT 1")
+        db_ok = True
+        db_message = "Database connection Succeeded"
+    except Exception as e:
+        db_message = f"Database connection FAILED: {e}"
+    logger.error(
+        f"STARTUP DIAG: Port {PORT} status: {port_status}; {db_message}; Env: DB_HOST={DB_HOST} DB_PORT={DB_PORT} DB_USER={DB_USER} DB_NAME={DB_NAME}"
+    )
+
+# Call at startup for extra diagnostics
+_diagnose_startup()
 
 # === Database Setup ===
 DB_HOST = os.getenv("DB_HOST", "localhost")
