@@ -14,6 +14,26 @@ from datetime import datetime, timedelta
 import jwt
 import hashlib
 
+# === Request Logging Middleware (added for debugging frontend-backend connectivity) ===
+class RequestLoggingMiddleware:
+    """
+    Logs incoming request details to backend logs for debugging frontend-backend connectivity.
+    """
+    def __init__(self, app):
+        self.app = app
+        self.logger = logging.getLogger("uvicorn.access")
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            req_method = scope["method"]
+            req_path = scope["path"]
+            client_host = scope.get("client", ["?"])[0]
+            headers = {k.decode(): v.decode() for k, v in scope.get("headers", [])}
+            self.logger.info(
+                f"INCOMING REQUEST from {client_host}: {req_method} {req_path} | Headers: {headers}"
+            )
+        await self.app(scope, receive, send)
+
 # Load env variables from .env
 load_dotenv()
 
@@ -30,7 +50,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
 AUTH_ENABLED = os.getenv("AUTH_ENABLED", "false").lower() == "true"
 
 # Google Gemini configuration - replace this stub with real implementation
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY = os.getenv("AIzaSyBqYe2aZFs3P4sl_V1vC32NdJV1Ebzv4MU")
 
 Base = declarative_base()
 
@@ -190,6 +211,9 @@ app = FastAPI(
         {"name": "files", "description": "Answer file ingestion"},
     ]
 )
+
+# Add request logging middleware first (catches every request, before CORS or auth)
+app.add_middleware(RequestLoggingMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
