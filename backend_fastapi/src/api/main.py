@@ -1,3 +1,14 @@
+"""
+FastAPI backend for TestAssist Gemini Bot.
+
+*** NOTE: Requires a running PostgreSQL instance ***
+- Must be accessible via environment variables: DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME.
+- See /database_container/README.md and the Compose example for details.
+- If DB is unavailable, routes depending on the DB will return HTTP 503 Service Unavailable.
+
+To run a local dev DB: see database_container/ (docker-compose recommended).
+"""
+
 import os
 import logging
 import socket
@@ -96,16 +107,31 @@ GEMINI_API_KEY = os.getenv("AIzaSyBqYe2aZFs3P4sl_V1vC32NdJV1Ebzv4MU")
 Base = declarative_base()
 
 def get_db():
-    engine = create_engine(
-        f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}",
-        pool_pre_ping=True,
-    )
-    SessionLocal = sessionmaker(bind=engine)
+    """
+    Dependency for getting a DB session.
+    Handles connection errors gracefully — so API endpoints return informative error if DB unavailable.
+    """
     try:
+        engine = create_engine(
+            f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}",
+            pool_pre_ping=True,
+        )
+        SessionLocal = sessionmaker(bind=engine)
         db = SessionLocal()
         yield db
+    except Exception as e:
+        logger = logging.getLogger("uvicorn.error")
+        logger.error(f"Database connection FAILED in get_db(): {e}")
+        # Raise a 503 Service Unavailable if DB can't be reached
+        raise HTTPException(
+            status_code=503,
+            detail="Database unavailable: could not connect. Ensure PostgreSQL is running and reachable via DB_HOST and DB_PORT."
+        )
     finally:
-        db.close()
+        try:
+            db.close()
+        except Exception:
+            pass
 
 # === Database Models ===
 
@@ -299,8 +325,15 @@ if AUTH_ENABLED:
     # PUBLIC_INTERFACE
     @app.get("/auth/profile", response_model=UserProfile, tags=["auth"], summary="Get user profile")
     def get_profile(user: User = Depends(get_user_from_token)):
-        """Returns profile info for authenticated user."""
-        return user
+        """Returns profile info for authenticated user.
+
+        NOTE: This endpoint requires database availability on startup.
+        If PostgreSQL is not running or unreachable, all DB-backed endpoints will fail with HTTP 503.
+        """
+        # Fix: Convert SQLAlchemy User to Pydantic UserProfile
+        return UserProfile(
+            id=user.id, username=user.username, created_at=user.created_at
+        )
 else:
     # Dummy endpoints for unauthenticated mode
     @app.post("/auth/token", response_model=Token, tags=["auth"], summary="Obtain JWT token")
@@ -470,10 +503,22 @@ async def generic_exception_handler(request: Request, exc: Exception):
 
 @app.on_event("startup")
 def on_startup():
-    """Create all database tables if they do not exist."""
-    # Ensure tables exist
-    engine = create_engine(
-        f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}",
-        pool_pre_ping=True,
-    )
-    Base.metadata.create_all(bind=engine)
+    """Create all database tables if they do not exist.
+
+    If PostgreSQL is unavailable at startup, logs a clear message and continues.
+    API endpoints requiring the DB will provide a user-friendly error if necessary.
+    """
+    try:
+        engine = create_engine(
+            f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}",
+            pool_pre_ping=True,
+        )
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        logger = logging.getLogger("uvicorn.error")
+        logger.error(
+            f"Database connection FAILED during table creation. Backend will start, "
+            f"but all DB routes will return 503 until PostgreSQL is available: {e}\n"
+            f"Ensure PostgreSQL is running at DB_HOST={DB_HOST} DB_PORT={DB_PORT} "
+            f"with expected DB_NAME/DB_USER/DB_PASSWORD."
+        )
