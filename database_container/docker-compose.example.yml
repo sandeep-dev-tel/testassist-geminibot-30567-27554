@@ -1,0 +1,15 @@
+version: '3'
+services:
+  database_container:
+    build: .
+    environment:
+      POSTGRES_DB: chatbotdb
+      POSTGRES_USER: chatbotuser
+      POSTGRES_PASSWORD: chatbotpass
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+volumes:
+  db_data:
