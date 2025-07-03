@@ -1,8 +1,11 @@
 import os
+import logging
 from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, Depends, HTTPException, Body, status, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.requests import Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, TIMESTAMP, JSON
@@ -249,6 +252,9 @@ else:
 
 # === Chat & Conversation Endpoints ===
 
+# Setup logging for error tracking
+logger = logging.getLogger("uvicorn.error")
+
 # PUBLIC_INTERFACE
 @app.post("/chat/", response_model=MessageOut, tags=["chat"], summary="Send user message", description="Submit a chat message. Starts a new conversation if no conversation_id is provided.")
 def send_message(
@@ -259,57 +265,70 @@ def send_message(
 ):
     """
     Handles a message from the user: stores it, calls Gemini API for response, and stores bot reply.
+    Enhanced: Improved exception handling, logs error details, returns a more informative error message to the user.
     """
-    # Determine which user ID to use (auth or dummy)
-    if AUTH_ENABLED:
-        user_id = user.id
-    else:
-        user_id = DUMMY_USER_ID
-        # Ensure the dummy user exists
-        if not db.query(User).filter_by(id=DUMMY_USER_ID).first():
-            db_dummy = User(id=DUMMY_USER_ID, username="guest", password_hash=None)
-            db.add(db_dummy)
+    try:
+        # Determine which user ID to use (auth or dummy)
+        if AUTH_ENABLED:
+            user_id = user.id
+        else:
+            user_id = DUMMY_USER_ID
+            # Ensure the dummy user exists
+            if not db.query(User).filter_by(id=DUMMY_USER_ID).first():
+                db_dummy = User(id=DUMMY_USER_ID, username="guest", password_hash=None)
+                db.add(db_dummy)
+                db.commit()
+        # Handle new conversation
+        if not conversation_id:
+            conversation = Conversation(user_id=user_id, title=None)
+            db.add(conversation)
             db.commit()
-    # Handle new conversation
-    if not conversation_id:
-        conversation = Conversation(user_id=user_id, title=None)
-        db.add(conversation)
+            db.refresh(conversation)
+        else:
+            conversation = db.query(Conversation).filter_by(id=conversation_id).first()
+            if not conversation:
+                raise HTTPException(status_code=404, detail="Conversation not found")
+        # Store user's message
+        msg = Message(conversation_id=conversation.id, sender="user", content=message.content)
+        db.add(msg)
         db.commit()
-        db.refresh(conversation)
-    else:
-        conversation = db.query(Conversation).filter_by(id=conversation_id).first()
-        if not conversation:
-            raise HTTPException(status_code=404, detail="Conversation not found")
-    # Store user's message
-    msg = Message(conversation_id=conversation.id, sender="user", content=message.content)
-    db.add(msg)
-    db.commit()
-    db.refresh(msg)
+        db.refresh(msg)
 
-    # Gather chat history for context (recent N messages)
-    recent_messages = db.query(Message).filter(Message.conversation_id == conversation.id).order_by(Message.created_at).all()
-    dialog_history = [
-        {"sender": m.sender, "content": m.content, "created_at": m.created_at.isoformat()} for m in recent_messages
-    ]
+        # Gather chat history for context (recent N messages)
+        recent_messages = db.query(Message).filter(Message.conversation_id == conversation.id).order_by(Message.created_at).all()
+        dialog_history = [
+            {"sender": m.sender, "content": m.content, "created_at": m.created_at.isoformat()} for m in recent_messages
+        ]
 
-    # Get Gemini bot answer
-    bot_resp_txt = gemini.get_answer(message.content, dialog_history)
-    bot_msg = Message(
-        conversation_id=conversation.id,
-        sender="bot",
-        content=bot_resp_txt,
-        gemini_response={"answer": bot_resp_txt},
-    )
-    db.add(bot_msg)
-    db.commit()
-    db.refresh(bot_msg)
-    return MessageOut(
-        id=bot_msg.id,
-        sender=bot_msg.sender,
-        content=bot_msg.content,
-        gemini_response=bot_msg.gemini_response,
-        created_at=bot_msg.created_at
-    )
+        # Get Gemini bot answer
+        bot_resp_txt = gemini.get_answer(message.content, dialog_history)
+        bot_msg = Message(
+            conversation_id=conversation.id,
+            sender="bot",
+            content=bot_resp_txt,
+            gemini_response={"answer": bot_resp_txt},
+        )
+        db.add(bot_msg)
+        db.commit()
+        db.refresh(bot_msg)
+        return MessageOut(
+            id=bot_msg.id,
+            sender=bot_msg.sender,
+            content=bot_msg.content,
+            gemini_response=bot_msg.gemini_response,
+            created_at=bot_msg.created_at
+        )
+    except HTTPException as he:
+        # Allow FastAPI HTTPException to propagate as usual for client errors
+        logger.warning(f"User error in /chat/: {he.detail}", exc_info=True)
+        raise
+    except Exception as e:
+        # For unexpected errors (DB, GeminiAPI, etc), log stack trace and return informative message
+        logger.error(f"Unexpected error in /chat/: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"A server error occurred: {str(e)}. Please contact support with this message.",
+        )
 
 # PUBLIC_INTERFACE
 @app.get("/chat/history", response_model=List[ConversationOut], tags=["history"], summary="Get conversation history")
@@ -371,6 +390,17 @@ async def upload_answers(file: UploadFile = File(...)):
 def websocket_usage_note():
     """There is no websocket connection currently implemented. All communication is via REST API."""
     return {"detail": "No WebSocket support. Use REST endpoints."}
+
+# --- Global error handling middleware for better user and logging feedback ---
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    """Catches all unhandled exceptions and logs details, returns informative error JSON."""
+    logger.error(f"Unhandled exception at {request.method} {request.url}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal Server Error: {str(exc)}. If this persists, contact support."},
+    )
 
 # === Create Tables On Startup ===
 
