@@ -1,5 +1,5 @@
-ERROR:    STARTUP DIAG: Port 3001 status: free; Database connection FAILED: Not an executable object: 'SELECT 1'; Env: DB_HOST=localhost DB_PORT=5432 DB_USER=chatbotuser DB_NAME=chatbotdb
-INFO:     Started server process [18917]
+ERROR:    STARTUP DIAG: Port 3001 status: free; Database connection Succeeded; Env: DB_HOST=localhost DB_PORT=5432 DB_USER=chatbotuser DB_NAME=chatbotdb
+INFO:     Started server process [26158]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:3001 (Press CTRL+C to quit)
