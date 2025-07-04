@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, TIMESTAMP, JSON
 from sqlalchemy.orm import sessionmaker, relationship, declarative_base, Session
 from datetime import datetime, timedelta
-import jwt
+from jose import jwt
 import hashlib
 
 # Load env variables from .env
