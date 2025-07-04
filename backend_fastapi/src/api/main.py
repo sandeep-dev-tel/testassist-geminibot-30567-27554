@@ -104,7 +104,7 @@ AUTH_ENABLED = os.getenv("AUTH_ENABLED", "false").lower() == "true"
 
 # Google Gemini configuration - replace this stub with real implementation
 # GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_API_KEY = os.getenv("AIzaSyBqYe2aZFs3P4sl_V1vC32NdJV1Ebzv4MU")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 Base = declarative_base()
 
@@ -263,7 +263,7 @@ class GeminiAPI:
         self.session = httpx.AsyncClient(timeout=20)
 
         # Use appropriate URL for Gemini-pro
-        self.gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
+        self.gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
 
     async def get_answer(self, question: str, history: List[Dict]) -> str:
         """
