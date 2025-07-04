@@ -1,0 +1,3 @@
+# Example answer file; add possible correct answers, one per line.
+
+# Whenever a message is submitted, the backend will attempt to find a relevant match in this file. If none, will fall back to Gemini or echo.
