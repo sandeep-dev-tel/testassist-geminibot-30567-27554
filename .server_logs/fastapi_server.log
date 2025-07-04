@@ -1,5 +1,18 @@
-ERROR:    STARTUP DIAG: Port 3001 status: free; Database connection Succeeded; Env: DB_HOST=localhost DB_PORT=5432 DB_USER=chatbotuser DB_NAME=chatbotdb
-INFO:     Started server process [75693]
+ERROR:    STARTUP DIAG: Port 3001 status: free; Database connection FAILED: (psycopg2.OperationalError) connection to server at "localhost" (::1), port 5432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+connection to server at "localhost" (127.0.0.1), port 5432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+
+(Background on this error at: https://sqlalche.me/e/20/e3q8); Env: DB_HOST=localhost DB_PORT=5432 DB_USER=chatbotuser DB_NAME=chatbotdb
+ERROR:    GEMINI_API_KEY is missing – Gemini integration will not work.
+INFO:     Started server process [552]
 INFO:     Waiting for application startup.
+ERROR:    Database connection FAILED during table creation. Backend will start, but all DB routes will return 503 until PostgreSQL is available: (psycopg2.OperationalError) connection to server at "localhost" (::1), port 5432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+connection to server at "localhost" (127.0.0.1), port 5432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Ensure PostgreSQL is running at DB_HOST=localhost DB_PORT=5432 with expected DB_NAME/DB_USER/DB_PASSWORD.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:3001 (Press CTRL+C to quit)

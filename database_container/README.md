@@ -30,3 +30,5 @@ DB_PASSWORD=chatbotpass
 ## Initialization
 
 On first start, schema is auto-created from `init.sql`.
+
+# 04-07-2025 comment 1
