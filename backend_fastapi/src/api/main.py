@@ -25,6 +25,7 @@ from sqlalchemy.orm import sessionmaker, relationship, declarative_base, Session
 from datetime import datetime, timedelta
 from jose import jwt
 import hashlib
+import httpx
 
 # Load env variables from .env
 load_dotenv()
@@ -240,21 +241,101 @@ def get_user_from_token(token: str = Depends(oauth2_scheme), db: Session = Depen
 # For unauthenticated mode, always use a dummy user id
 DUMMY_USER_ID = 1
 
-# === Gemini Integration (Stub, replace with true implementation) ===
+# === Gemini Integration (Real Google Gemini implementation) ===
+
+# Moved import to top of file for linter compliance
 
 class GeminiAPI:
-    """Stub for Gemini-compatible response engine. Replace with real Google Gemini integration."""
+    """
+    Implementation of a Gemini-compatible response engine using Google Gemini API.
+
+    This class issues HTTP requests to the Gemini API using the API key loaded from
+    environment, and falls back to searching the answer .txt file for context matches.
+    """
+
     def __init__(self, answer_data: List[str]):
         self.answer_data = answer_data
+        api_key_from_env = os.getenv("GEMINI_API_KEY")
+        self.api_key = api_key_from_env
+        if not self.api_key:
+            logger = logging.getLogger("uvicorn.error")
+            logger.error("GEMINI_API_KEY is missing – Gemini integration will not work.")
+        self.session = httpx.AsyncClient(timeout=20)
 
-    def get_answer(self, question: str, history: List[Dict]) -> str:
+        # Use appropriate URL for Gemini-pro
+        self.gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
+
+    async def get_answer(self, question: str, history: List[Dict]) -> str:
+        """
+        Sends the question and conversation history to Google Gemini and returns the response.
+
+        Args:
+            question: The user's question string.
+            history: A list of dicts containing message history, with keys sender, content, created_at.
+
+        Returns:
+            The Gemini-generated answer, or a fallback from the answer txt file if there is an issue.
+        """
+        if not self.api_key:
+            # Fallback if API key is missing: try local matching.
+            return self._fallback_answer(question)
+
+        # Format history as context for Gemini (optionally keep to N recent)
+        context_msgs = []
+        for h in history:
+            # Format as message for Gemini (optionally: prepend role)
+            role = "user" if h["sender"] == "user" else "model"
+            context_msgs.append({"role": role, "parts": [{"text": h["content"]}]})
+        
+        # Append this user question as last
+        payload = {
+            "contents": context_msgs + [{"role": "user", "parts": [{"text": question}]}],
+        }
+
+        headers = {"Content-Type": "application/json"}
+
+        try:
+            # Compose URL (key in query param)
+            url = f"{self.gemini_url}?key={self.api_key}"
+            # Send POST request to Gemini
+            resp = await self.session.post(url, json=payload, headers=headers)
+            if resp.status_code != 200:
+                logger = logging.getLogger("uvicorn.error")
+                logger.warning(f"Gemini API HTTP error {resp.status_code}: {resp.text}")
+                return self._fallback_answer(question)
+            # Parse Gemini response
+            resp_data = resp.json()
+            answer = None
+            # Main content
+            if "candidates" in resp_data and resp_data["candidates"]:
+                # Gemini API gives "candidates": [{content:{parts:[{"text":...}]}}]
+                answer = (
+                    resp_data["candidates"][0]
+                    .get("content", {})
+                    .get("parts", [{}])[0]
+                    .get("text")
+                )
+            if not answer:
+                answer = resp_data.get("promptFeedback", {}).get("blockReason")
+            # Fallback if no text in answer
+            if answer:
+                return answer.strip()
+            else:
+                return self._fallback_answer(question)
+        except Exception as e:
+            logger = logging.getLogger("uvicorn.error")
+            logger.error(f"Error calling Google Gemini API: {e}", exc_info=True)
+            return self._fallback_answer(question)
+
+    def _fallback_answer(self, question: str) -> str:
+        """Fallback: search answer file, or echo question."""
+        # Fuzzy match one answer from list, or echo.
         if self.answer_data:
             for answer in self.answer_data:
                 if answer.lower() in question.lower():
                     return answer
             return self.answer_data[0]
-        # Fallback: echo
-        return f"Echo (Gemini stub): {question}"
+        return f"Echo (Gemini fallback): {question}"
 
 def load_answers_from_txt(file_path: str) -> List[str]:
     """Load .txt file into list of possible answers for in-context retrieval."""
@@ -356,9 +437,11 @@ else:
 # Setup logging for error tracking
 logger = logging.getLogger("uvicorn.error")
 
+# Move duplicate import to top of file (already imported above).
+
 # PUBLIC_INTERFACE
 @app.post("/chat/", response_model=MessageOut, tags=["chat"], summary="Send user message", description="Submit a chat message. Starts a new conversation if no conversation_id is provided.")
-def send_message(
+async def send_message(
     message: MessageCreate,
     conversation_id: Optional[int] = Body(None, description="Conversation to append message to"),
     user=Depends(get_user_from_token) if AUTH_ENABLED else None,  # Remove typing to avoid FastAPI response model error
@@ -401,8 +484,8 @@ def send_message(
             {"sender": m.sender, "content": m.content, "created_at": m.created_at.isoformat()} for m in recent_messages
         ]
 
-        # Get Gemini bot answer
-        bot_resp_txt = gemini.get_answer(message.content, dialog_history)
+        # Get Gemini bot answer (await real HTTP call)
+        bot_resp_txt = await gemini.get_answer(message.content, dialog_history)
         bot_msg = Message(
             conversation_id=conversation.id,
             sender="bot",
