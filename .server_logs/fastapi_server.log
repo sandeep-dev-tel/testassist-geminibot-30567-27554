@@ -5,7 +5,7 @@ connection to server at "localhost" (127.0.0.1), port 5432 failed: Connection re
 
 (Background on this error at: https://sqlalche.me/e/20/e3q8); Env: DB_HOST=localhost DB_PORT=5432 DB_USER=chatbotuser DB_NAME=chatbotdb
 ERROR:    GEMINI_API_KEY is missing – Gemini integration will not work.
-INFO:     Started server process [2152]
+INFO:     Started server process [3629]
 INFO:     Waiting for application startup.
 ERROR:    Database connection FAILED during table creation. Backend will start, but all DB routes will return 503 until PostgreSQL is available: (psycopg2.OperationalError) connection to server at "localhost" (::1), port 5432 failed: Connection refused
 	Is the server running on that host and accepting TCP/IP connections?
