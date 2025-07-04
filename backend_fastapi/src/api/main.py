@@ -55,9 +55,10 @@ def _diagnose_startup():
     # DB check
     db_message = ""
     try:
+        from sqlalchemy import text  # Fix for SQLAlchemy 2.x: Use text() for raw SQL
         engine = create_engine(f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}", pool_pre_ping=True)
         with engine.connect() as conn:
-            _ = conn.execute("SELECT 1")
+            _ = conn.execute(text("SELECT 1"))
         db_message = "Database connection Succeeded"
     except Exception as e:
         db_message = f"Database connection FAILED: {e}"
