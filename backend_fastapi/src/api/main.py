@@ -172,16 +172,18 @@ class MessageOut(BaseModel):
     gemini_response: Optional[Dict[str, Any]]
     created_at: datetime
     # conversation_id intentionally left out for chat display
+
     class Config:
-        orm_mode = True
+        from_attributes = True  # Update per Pydantic v2, replaces orm_mode
 
 class ConversationOut(BaseModel):
     id: int
     title: Optional[str]
     created_at: datetime
     messages: List[MessageOut]
+
     class Config:
-        orm_mode = True
+        from_attributes = True  # Update per Pydantic v2, replaces orm_mode
 
 class UserCreate(BaseModel):
     username: str = Field(..., description="Username for new user.")
@@ -195,8 +197,9 @@ class UserProfile(BaseModel):
     id: int
     username: str
     created_at: datetime
+
     class Config:
-        orm_mode = True
+        from_attributes = True  # Pydantic v2 compatibility
 
 # === Authentication Utilities ===
 
@@ -357,7 +360,7 @@ logger = logging.getLogger("uvicorn.error")
 def send_message(
     message: MessageCreate,
     conversation_id: Optional[int] = Body(None, description="Conversation to append message to"),
-    user: User = Depends(get_user_from_token) if AUTH_ENABLED else None,
+    user=Depends(get_user_from_token) if AUTH_ENABLED else None,  # Remove typing to avoid FastAPI response model error
     db: Session = Depends(get_db),
 ):
     """
@@ -430,7 +433,7 @@ def send_message(
 # PUBLIC_INTERFACE
 @app.get("/chat/history", response_model=List[ConversationOut], tags=["history"], summary="Get conversation history")
 def get_history(
-    user: User = Depends(get_user_from_token) if AUTH_ENABLED else None,
+    user=Depends(get_user_from_token) if AUTH_ENABLED else None,  # Remove typing to avoid FastAPI response model issues
     db: Session = Depends(get_db)
 ):
     """
