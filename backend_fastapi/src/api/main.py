@@ -30,7 +30,7 @@ import httpx
 # Load env variables from .env
 load_dotenv()
 
-# === Startup Debug for 502 Diagnosis ===
+# --- Helper: Diagnose Startup ---
 def _diagnose_startup():
     """
     Prints diagnostic info to help troubleshoot 502 Bad Gateway:
@@ -56,7 +56,7 @@ def _diagnose_startup():
     # DB check
     db_message = ""
     try:
-        from sqlalchemy import text  # Fix for SQLAlchemy 2.x: Use text() for raw SQL
+        from sqlalchemy import text
         engine = create_engine(f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}", pool_pre_ping=True)
         with engine.connect() as conn:
             _ = conn.execute(text("SELECT 1"))
@@ -66,19 +66,14 @@ def _diagnose_startup():
     logger.error(
         f"STARTUP DIAG: Port {PORT} status: {port_status}; {db_message}; Env: DB_HOST={DB_HOST} DB_PORT={DB_PORT} DB_USER={DB_USER} DB_NAME={DB_NAME}"
     )
-
-# Call at startup for extra diagnostics
 _diagnose_startup()
 
-# === Request Logging Middleware (added for debugging frontend-backend connectivity) ===
+# --- Middleware: Request Logging ---
 class RequestLoggingMiddleware:
-    """
-    Logs incoming request details to backend logs for debugging frontend-backend connectivity.
-    """
+    """Request log for backend debugging."""
     def __init__(self, app):
         self.app = app
         self.logger = logging.getLogger("uvicorn.access")
-
     async def __call__(self, scope, receive, send):
         if scope["type"] == "http":
             req_method = scope["method"]
@@ -90,7 +85,7 @@ class RequestLoggingMiddleware:
             )
         await self.app(scope, receive, send)
 
-# === Database Setup ===
+# --- Database Setup ---
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "chatbotdb")
@@ -101,18 +96,11 @@ JWT_SECRET = os.getenv("JWT_SECRET", "supersecret")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 AUTH_ENABLED = os.getenv("AUTH_ENABLED", "false").lower() == "true"
-
-# Google Gemini configuration - replace this stub with real implementation
-# GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 Base = declarative_base()
-
 def get_db():
-    """
-    Dependency for getting a DB session.
-    Handles connection errors gracefully — so API endpoints return informative error if DB unavailable.
-    """
+    """Database session dependency. Raises HTTP 503 if DB down."""
     try:
         engine = create_engine(
             f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}",
@@ -124,7 +112,6 @@ def get_db():
     except Exception as e:
         logger = logging.getLogger("uvicorn.error")
         logger.error(f"Database connection FAILED in get_db(): {e}")
-        # Raise a 503 Service Unavailable if DB can't be reached
         raise HTTPException(
             status_code=503,
             detail="Database unavailable: could not connect. Ensure PostgreSQL is running and reachable via DB_HOST and DB_PORT."
@@ -135,15 +122,13 @@ def get_db():
         except Exception:
             pass
 
-# === Database Models ===
-
+# --- Database Models ---
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(64), unique=True, nullable=False)
     password_hash = Column(String(256), nullable=True)
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
-
 class Conversation(Base):
     __tablename__ = "conversations"
     id = Column(Integer, primary_key=True, index=True)
@@ -151,7 +136,6 @@ class Conversation(Base):
     title = Column(String(128))
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
     messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
-
 class Message(Base):
     __tablename__ = "messages"
     id = Column(Integer, primary_key=True, index=True)
@@ -162,64 +146,49 @@ class Message(Base):
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
     conversation = relationship("Conversation", back_populates="messages")
 
-# === Pydantic Schemas (For API requests/responses) ===
-
+# --- Pydantic Schemas ---
 class MessageCreate(BaseModel):
     content: str = Field(..., description="Message sent by user.")
-
 class MessageOut(BaseModel):
     id: int
     sender: str
     content: str
     gemini_response: Optional[Dict[str, Any]]
     created_at: datetime
-    # conversation_id intentionally left out for chat display
-
     class Config:
-        from_attributes = True  # Update per Pydantic v2, replaces orm_mode
-
+        from_attributes = True
 class ConversationOut(BaseModel):
     id: int
     title: Optional[str]
     created_at: datetime
     messages: List[MessageOut]
-
     class Config:
-        from_attributes = True  # Update per Pydantic v2, replaces orm_mode
-
+        from_attributes = True
 class UserCreate(BaseModel):
     username: str = Field(..., description="Username for new user.")
     password: str = Field(..., description="Password for new user.")
-
 class Token(BaseModel):
     access_token: str
     token_type: str
-
 class UserProfile(BaseModel):
     id: int
     username: str
     created_at: datetime
-
     class Config:
-        from_attributes = True  # Pydantic v2 compatibility
+        from_attributes = True
 
-# === Authentication Utilities ===
-
+# --- Authentication Utilities ---
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
-
 def hash_password(password: str):
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
-
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
     return encoded_jwt
-
 def verify_password(plain_password: str, hashed_password: str):
     return hash_password(plain_password) == hashed_password
-
 def get_user_from_token(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
     """Validate JWT token and return current user if authenticated."""
     credentials_exception = HTTPException(
@@ -237,22 +206,15 @@ def get_user_from_token(token: str = Depends(oauth2_scheme), db: Session = Depen
     if user is None:
         raise credentials_exception
     return user
-
-# For unauthenticated mode, always use a dummy user id
 DUMMY_USER_ID = 1
 
-# === Gemini Integration (Real Google Gemini implementation) ===
-
-# Moved import to top of file for linter compliance
-
+# --- Gemini Integration ---
 class GeminiAPI:
     """
     Implementation of a Gemini-compatible response engine using Google Gemini API.
-
     This class issues HTTP requests to the Gemini API using the API key loaded from
     environment, and falls back to searching the answer .txt file for context matches.
     """
-
     def __init__(self, answer_data: List[str]):
         self.answer_data = answer_data
         api_key_from_env = os.getenv("GEMINI_API_KEY")
@@ -261,54 +223,31 @@ class GeminiAPI:
             logger = logging.getLogger("uvicorn.error")
             logger.error("GEMINI_API_KEY is missing – Gemini integration will not work.")
         self.session = httpx.AsyncClient(timeout=20)
-
-        # Use appropriate URL for Gemini-pro
         self.gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
-
     async def get_answer(self, question: str, history: List[Dict]) -> str:
         """
         Sends the question and conversation history to Google Gemini and returns the response.
-
-        Args:
-            question: The user's question string.
-            history: A list of dicts containing message history, with keys sender, content, created_at.
-
-        Returns:
-            The Gemini-generated answer, or a fallback from the answer txt file if there is an issue.
         """
         if not self.api_key:
-            # Fallback if API key is missing: try local matching.
             return self._fallback_answer(question)
-
-        # Format history as context for Gemini (optionally keep to N recent)
         context_msgs = []
         for h in history:
-            # Format as message for Gemini (optionally: prepend role)
             role = "user" if h["sender"] == "user" else "model"
             context_msgs.append({"role": role, "parts": [{"text": h["content"]}]})
-        
-        # Append this user question as last
         payload = {
             "contents": context_msgs + [{"role": "user", "parts": [{"text": question}]}],
         }
-
         headers = {"Content-Type": "application/json"}
-
         try:
-            # Compose URL (key in query param)
             url = f"{self.gemini_url}?key={self.api_key}"
-            # Send POST request to Gemini
             resp = await self.session.post(url, json=payload, headers=headers)
             if resp.status_code != 200:
                 logger = logging.getLogger("uvicorn.error")
                 logger.warning(f"Gemini API HTTP error {resp.status_code}: {resp.text}")
                 return self._fallback_answer(question)
-            # Parse Gemini response
             resp_data = resp.json()
             answer = None
-            # Main content
             if "candidates" in resp_data and resp_data["candidates"]:
-                # Gemini API gives "candidates": [{content:{parts:[{"text":...}]}}]
                 answer = (
                     resp_data["candidates"][0]
                     .get("content", {})
@@ -317,7 +256,6 @@ class GeminiAPI:
                 )
             if not answer:
                 answer = resp_data.get("promptFeedback", {}).get("blockReason")
-            # Fallback if no text in answer
             if answer:
                 return answer.strip()
             else:
@@ -326,30 +264,24 @@ class GeminiAPI:
             logger = logging.getLogger("uvicorn.error")
             logger.error(f"Error calling Google Gemini API: {e}", exc_info=True)
             return self._fallback_answer(question)
-
     def _fallback_answer(self, question: str) -> str:
         """Fallback: search answer file, or echo question."""
-        # Fuzzy match one answer from list, or echo.
         if self.answer_data:
             for answer in self.answer_data:
                 if answer.lower() in question.lower():
                     return answer
             return self.answer_data[0]
         return f"Echo (Gemini fallback): {question}"
-
 def load_answers_from_txt(file_path: str) -> List[str]:
     """Load .txt file into list of possible answers for in-context retrieval."""
     if not os.path.exists(file_path):
         return []
     with open(file_path, "r", encoding="utf-8") as f:
         return [line.strip() for line in f if line.strip()]
-
-# Instantiate Gemini engine (loaded once at startup)
 answer_data = load_answers_from_txt(ANSWER_FILE_PATH)
 gemini = GeminiAPI(answer_data=answer_data)
 
-# === FastAPI App Setup ===
-
+# --- FastAPI App Setup ---
 app = FastAPI(
     title="TestAssist Gemini Bot API",
     description="Backend API to handle user interactions, Google Gemini-powered chat, and answer retrieval for Test Engineers.",
@@ -362,10 +294,7 @@ app = FastAPI(
         {"name": "files", "description": "Answer file ingestion"},
     ]
 )
-
-# Add request logging middleware first (catches every request, before CORS or auth)
 app.add_middleware(RequestLoggingMiddleware)
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -374,7 +303,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# === Health Check ===
+# --- API ROUTES ---
 # PUBLIC_INTERFACE
 @app.get("/", tags=["health"], summary="Ping backend", description="Health check for backend API.")
 def health_check():
