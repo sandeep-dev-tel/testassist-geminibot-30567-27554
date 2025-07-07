@@ -33,4 +33,8 @@ EOSQL2
 # Step 8: Run the init.sql script as the new user to initialize the schema
 psql -U kavia -d chatdb2 -f ../database_container/init.sql
 
+pip install -r requirements.txt
+
+
 echo "PostgreSQL setup completed with exact user-specified commands."
+uvicorn src.api.main:app --host 0.0.0.0 --port 3001
