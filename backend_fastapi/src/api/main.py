@@ -297,7 +297,10 @@ app = FastAPI(
 app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://vscode-internal-7660-beta.beta01.cloud.kavia.ai:3000"],
+    allow_origins=[
+        "https://vscode-internal-7660-beta.beta01.cloud.kavia.ai:3000",
+        "https://vscode-internal-8510-beta.beta01.cloud.kavia.ai:3000"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
